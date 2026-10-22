@@ -234,6 +234,7 @@ def _call_ai(document_text: str) -> dict[str, Any]:
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     try:
+        logger.info("AI base URL configured: %s", base_url)
         response = httpx.post(
             f"{base_url}/chat/completions",
             headers=headers,
