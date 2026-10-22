@@ -61,6 +61,43 @@ class InvoiceAgentTests(unittest.TestCase):
         self.assertEqual(first.json(), second.json())
         self.assertEqual(mocked.call_count, 1)
 
+    def test_message_send_route_accepts_jsonrpc_and_direct_message(self):
+        analysis = {
+            "vendor": "Acme",
+            "invoice_number": "A-42",
+            "recommended_action": "hold",
+            "summary": "Needs review.",
+            "evidence": [],
+        }
+        with patch.object(app, "_call_ai", return_value=analysis):
+            rpc_response = self.client.post(
+                "/message:send",
+                json={
+                    "jsonrpc": "2.0",
+                    "id": "rpc-message",
+                    "method": "message/send",
+                    "params": {
+                        "message": {
+                            "parts": [{"kind": "text", "text": "Acme invoice A-42"}]
+                        }
+                    },
+                },
+            )
+            direct_response = self.client.post(
+                "/message:send",
+                json={
+                    "messageId": "direct-message",
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": "Acme invoice A-42"}],
+                },
+            )
+        self.assertEqual(rpc_response.status_code, 200)
+        self.assertEqual(rpc_response.headers["content-type"], "application/json")
+        self.assertEqual(rpc_response.json()["jsonrpc"], "2.0")
+        self.assertEqual(direct_response.status_code, 200)
+        self.assertEqual(direct_response.headers["content-type"], "application/json")
+        self.assertEqual(direct_response.json()["kind"], "task")
+
     def test_only_same_vendor_and_invoice_is_duplicate(self):
         invoice = {
             "vendor": "Acme",

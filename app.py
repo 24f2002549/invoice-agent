@@ -626,6 +626,8 @@ async def agent_card(request: Request) -> dict[str, Any]:
 
 @app.post("/")
 @app.post("/a2a")
+@app.post("/message:send")
+@app.post("/message/send")
 async def a2a(request: Request) -> JSONResponse:
     principal = _principal(request)
     try:
@@ -635,14 +637,22 @@ async def a2a(request: Request) -> JSONResponse:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="JSON-RPC request must be an object")
     request_id = payload.get("id")
-    if payload.get("jsonrpc") != "2.0" or not isinstance(payload.get("method"), str):
+    is_jsonrpc = payload.get("jsonrpc") == "2.0"
+    if not is_jsonrpc and request.url.path not in {"/message:send", "/message/send"}:
         return JSONResponse(
             status_code=400,
             content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32600, "message": "Invalid JSON-RPC request"}},
         )
 
-    method = payload["method"]
-    params = payload.get("params", {})
+    if is_jsonrpc and not isinstance(payload.get("method"), str):
+        return JSONResponse(
+            status_code=400,
+            content={"jsonrpc": "2.0", "id": request_id, "error": {"code": -32600, "message": "Invalid JSON-RPC request"}},
+        )
+    method = payload.get("method", "message/send")
+    params = payload.get("params", payload)
+    if not is_jsonrpc and "message" not in params and "parts" in params:
+        params = {"message": params}
     if not isinstance(params, dict):
         return JSONResponse(
             status_code=400,
@@ -680,4 +690,6 @@ async def a2a(request: Request) -> JSONResponse:
                 },
             },
         )
-    return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": result})
+    if is_jsonrpc:
+        return JSONResponse(content={"jsonrpc": "2.0", "id": request_id, "result": result})
+    return JSONResponse(content=result)
